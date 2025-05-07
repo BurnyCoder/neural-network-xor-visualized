@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-P8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Network Training Visualization</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background-color: #f0f4f8; color: #333; padding: 1rem; }
+        .controls-container { background-color: white; padding: 1.5rem; border-radius: 0.75rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-top: 1.5rem; width: 100%; max-width: 600px; }
+        .control-item { margin-bottom: 0.75rem; }
+        .control-item label { margin-right: 0.5rem; font-weight: 500;}
+        .control-item input[type="range"] { width: calc(100% - 100px); } /* Adjust width as needed */
+        button {
+            background-color: #3b82f6; /* Tailwind blue-500 */
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem; /* Tailwind rounded-md */
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-weight: 500;
+        }
+        button:hover {
+            background-color: #2563eb; /* Tailwind blue-600 */
+        }
+        button:disabled {
+            background-color: #9ca3af; /* Tailwind gray-400 */
+            cursor: not-allowed;
+        }
+        #networkCanvas {
+            border: 1px solid #d1d5db; /* Tailwind gray-300 */
+            border-radius: 0.5rem;
+            background-color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .info-display {
+            font-size: 0.875rem; /* Tailwind text-sm */
+            color: #4b5563; /* Tailwind gray-600 */
+        }
+        .title-header {
+            font-size: 1.5rem; /* Tailwind text-2xl */
+            font-weight: 600;
+            color: #1f2937; /* Tailwind gray-800 */
+            margin-bottom: 1rem;
+        }
+        .explanation-box h3 { margin-bottom: 0.5rem; } /* Add a bit of space below explanation titles */
+        .explanation-box ul { margin-left: 1rem; } /* Indent lists slightly */
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4 text-center">
+        <h1 class="title-header">Neural Network Training Visualization (XOR)</h1>
+
+        <canvas id="networkCanvas" width="600" height="400"></canvas>
+
+        <div class="controls-container mt-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <button id="startButton" class="w-full">Start Training</button>
+                <button id="stopButton" class="w-full" disabled>Stop Training</button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <button id="resetButton" class="w-full">Reset Weights</button>
+                 <button id="nextStepButton" class="w-full">Next Step</button>
+            </div>
+
+            <div class="control-item">
+                <label for="lrSlider">Learning Rate:</label>
+                <input type="range" id="lrSlider" min="0.01" max="1" step="0.01" value="0.1" class="align-middle">
+                <span id="lrValue" class="ml-2 info-display">0.1</span>
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+                <div class="info-display p-2 bg-gray-50 rounded-md">Epoch: <span id="epochDisplay">0</span></div>
+                <div class="info-display p-2 bg-gray-50 rounded-md">Sample: <span id="sampleDisplay">-</span> / 4</div>
+                <div class="info-display p-2 bg-gray-50 rounded-md">Loss: <span id="lossDisplay">N/A</span></div>
+            </div>
+             <div class="mt-4 text-sm info-display p-2 bg-gray-50 rounded-md">
+                Current Input: <span id="currentInputDisplay">-</span> Target: <span id="currentTargetDisplay">-</span> Output: <span id="currentOutputDisplay">-</span>
+            </div>
+        </div>
+
+        <div id="explanationsContainer" class="mt-8 w-full max-w-3xl mx-auto text-left">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700 text-center sm:text-left">Understanding the Visualization</h2>
+
+            <div class="explanation-box bg-white p-4 rounded-lg shadow mb-4">
+                <h3 class="text-lg font-semibold text-blue-600 mb-2">Network Structure</h3>
+                <p class="text-sm text-gray-700 mb-1"><strong>Layers:</strong></p>
+                <ul class="list-disc list-inside text-sm text-gray-600 mb-2 space-y-1">
+                    <li><strong>Input Layer (Left):</strong> Receives initial data (e.g., <code>[0,0]</code>).</li>
+                    <li><strong>Hidden Layer (Middle):</strong> Processes information from the input layer.</li>
+                    <li><strong>Output Layer (Right):</strong> Produces the network's final prediction.</li>
+                </ul>
+                <p class="text-sm text-gray-700 mb-1"><strong>Neurons (Circles):</strong></p>
+                <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
+                     <li><strong>Color:</strong> Indicates activation level. Darker/cooler (blueish) for low activation (near 0), brighter/warmer (yellowish) for high activation (near 1).</li>
+                     <li><strong>Labels (I0, H1, O0):</strong> Identifiers for each neuron (Input, Hidden, Output).</li>
+                </ul>
+            </div>
+
+            <div class="explanation-box bg-white p-4 rounded-lg shadow mb-4">
+                <h3 class="text-lg font-semibold text-blue-600 mb-2">Connections (Weights)</h3>
+                <p class="text-sm text-gray-700 mb-1">Lines between neurons represent connections, each with an associated <strong>weight</strong> that the network learns.</p>
+                <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
+                    <li><strong>Line Thickness:</strong> A thicker line means a stronger influence (higher absolute weight value).</li>
+                    <li><strong>Line Color:</strong>
+                        <ul class="list-disc list-inside ml-4">
+                            <li><strong>Green:</strong> Positive weight (excites/increases activation of the next neuron).</li>
+                            <li><strong>Red:</strong> Negative weight (inhibits/decreases activation of the next neuron).</li>
+                        </ul>
+                    </li>
+                     <li><strong>Color Opacity:</strong> More opaque color also indicates a larger weight magnitude.</li>
+                </ul>
+            </div>
+
+            <div class="explanation-box bg-white p-4 rounded-lg shadow">
+                <h3 class="text-lg font-semibold text-blue-600 mb-2">Training Process & Displays</h3>
+                <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
+                    <li><strong>Epoch:</strong> One complete pass through all training samples (e.g., all 4 XOR combinations).</li>
+                    <li><strong>Sample:</strong> The current input-target pair (e.g., Input: <code>[0,1]</code>, Target: <code>[1]</code>) being processed.</li>
+                    <li><strong>Loss:</strong> A measure of how incorrect the network's current prediction is. Lower is better.</li>
+                    <li><strong>Learning Rate:</strong> Controls how much the weights are adjusted during each training step. A higher rate can learn faster but may be unstable.</li>
+                    <li><strong>Current Input/Target/Output:</strong> Shows the data values for the immediate training step.</li>
+                </ul>
+            </div>
+        </div>
+        </div>
+
+    <script>
+        // --- Neural Network Core ---
+        class NeuralNetwork {
+            constructor(inputNodes, hiddenNodes, outputNodes) {
+                this.inputNodes = inputNodes;
+                this.hiddenNodes = hiddenNodes;
+                this.outputNodes = outputNodes;
+
+                // Initialize weights and biases
+                // Weights between input and hidden layer
+                this.weights_ih = Array(this.hiddenNodes).fill(null).map(() =>
+                    Array(this.inputNodes).fill(null).map(() => Math.random() * 2 - 1) // Random weights between -1 and 1
+                );
+                // Weights between hidden and output layer
+                this.weights_ho = Array(this.outputNodes).fill(null).map(() =>
+                    Array(this.hiddenNodes).fill(null).map(() => Math.random() * 2 - 1)
+                );
+
+                // Biases for hidden layer
+                this.bias_h = Array(this.hiddenNodes).fill(null).map(() => Math.random() * 2 - 1);
+                // Biases for output layer
+                this.bias_o = Array(this.outputNodes).fill(null).map(() => Math.random() * 2 - 1);
+
+                // Activations will be stored here after feedforward
+                this.input_activations = [];
+                this.hidden_activations = [];
+                this.output_activations = [];
+            }
+
+            sigmoid(x) {
+                return 1 / (1 + Math.exp(-x));
+            }
+
+            sigmoidDerivative(x) {
+                return x * (1 - x); // Assumes x is already sigmoided output
+            }
+
+            feedForward(inputs) {
+                if (inputs.length !== this.inputNodes) {
+                    console.error("Incorrect number of inputs");
+                    return null;
+                }
+                this.input_activations = [...inputs];
+
+                // Calculate hidden layer activations
+                this.hidden_activations = this.weights_ih.map((weights_row, i) => {
+                    let sum = this.bias_h[i];
+                    for (let j = 0; j < this.inputNodes; j++) {
+                        sum += inputs[j] * weights_row[j];
+                    }
+                    return this.sigmoid(sum);
+                });
+
+                // Calculate output layer activations
+                this.output_activations = this.weights_ho.map((weights_row, i) => {
+                    let sum = this.bias_o[i];
+                    for (let j = 0; j < this.hiddenNodes; j++) {
+                        sum += this.hidden_activations[j] * weights_row[j];
+                    }
+                    return this.sigmoid(sum);
+                });
+
+                return this.output_activations;
+            }
+
+            train(inputs, targets, learningRate) {
+                // Perform feedforward to get activations
+                const outputs = this.feedForward(inputs);
+                if (!outputs) return; // Error in feedForward
+
+                // --- Backpropagation ---
+
+                // 1. Calculate output layer errors (Output_Error = Target - Actual_Output)
+                const output_errors = targets.map((target, i) => target - outputs[i]);
+
+                // 2. Calculate output gradients (Gradient = LR * Error * d(Sigmoid)/dx * Hidden_Activations)
+                //    d(Sigmoid)/dx for output layer is outputs[i] * (1 - outputs[i])
+                const output_gradients = outputs.map((output, i) => {
+                    return learningRate * output_errors[i] * this.sigmoidDerivative(output);
+                });
+
+                // 3. Calculate deltas for weights_ho and update weights_ho
+                for (let i = 0; i < this.outputNodes; i++) {
+                    for (let j = 0; j < this.hiddenNodes; j++) {
+                        const delta_weights_ho = output_gradients[i] * this.hidden_activations[j];
+                        this.weights_ho[i][j] += delta_weights_ho;
+                    }
+                    // Update output biases
+                    this.bias_o[i] += output_gradients[i];
+                }
+
+                // 4. Calculate hidden layer errors (sum of (Output_Error * Weight_ho))
+                const hidden_errors = Array(this.hiddenNodes).fill(0);
+                for (let i = 0; i < this.hiddenNodes; i++) {
+                    for (let j = 0; j < this.outputNodes; j++) {
+                        hidden_errors[i] += output_errors[j] * this.weights_ho[j][i]; // Transposed weight
+                    }
+                }
+                
+                // 5. Calculate hidden gradients (Gradient = LR * Error * d(Sigmoid)/dx * Input_Activations)
+                //    d(Sigmoid)/dx for hidden layer is hidden_activations[i] * (1 - hidden_activations[i])
+                const hidden_gradients = this.hidden_activations.map((activation, i) => {
+                    return learningRate * hidden_errors[i] * this.sigmoidDerivative(activation);
+                });
+
+                // 6. Calculate deltas for weights_ih and update weights_ih
+                for (let i = 0; i < this.hiddenNodes; i++) {
+                    for (let j = 0; j < this.inputNodes; j++) {
+                        const delta_weights_ih = hidden_gradients[i] * inputs[j];
+                        this.weights_ih[i][j] += delta_weights_ih;
+                    }
+                     // Update hidden biases
+                    this.bias_h[i] += hidden_gradients[i];
+                }
+            }
+        }
+
+        // --- Visualization Globals ---
+        const canvas = document.getElementById('networkCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const resetButton = document.getElementById('resetButton');
+        const nextStepButton = document.getElementById('nextStepButton');
+        
+        const lrSlider = document.getElementById('lrSlider');
+        const lrValueDisplay = document.getElementById('lrValue');
+        
+        const epochDisplay = document.getElementById('epochDisplay');
+        const sampleDisplay = document.getElementById('sampleDisplay');
+        const lossDisplay = document.getElementById('lossDisplay');
+        const currentInputDisplay = document.getElementById('currentInputDisplay');
+        const currentTargetDisplay = document.getElementById('currentTargetDisplay');
+        const currentOutputDisplay = document.getElementById('currentOutputDisplay');
+
+
+        // Network parameters
+        const INPUT_NODES = 2;
+        const HIDDEN_NODES = 3;
+        const OUTPUT_NODES = 1;
+        let learningRate = 0.1;
+
+        let network = new NeuralNetwork(INPUT_NODES, HIDDEN_NODES, OUTPUT_NODES);
+
+        // XOR Dataset
+        const dataset = [
+            { inputs: [0, 0], targets: [0] },
+            { inputs: [0, 1], targets: [1] },
+            { inputs: [1, 0], targets: [1] },
+            { inputs: [1, 1], targets: [0] },
+        ];
+
+        let currentEpoch = 0;
+        let currentSampleIndex = 0;
+        let totalLossLastEpoch = 0;
+        let samplesInEpoch = 0;
+        let isTraining = false;
+        let animationFrameId;
+
+        // --- Drawing Functions ---
+        const neuronRadius = 15;
+        const layerSpacing = 180; // Increased spacing
+        const neuronSpacing = 70; // Spacing between neurons in a layer
+
+        function drawNeuron(x, y, activation = 0, label = '') {
+            // Activation color: 0 (dark blue/gray) to 1 (bright yellow)
+            const activationColorIntensity = Math.max(0, Math.min(1, activation)); // Clamp between 0 and 1
+            const hue = 40 + activationColorIntensity * 20; // Yellowish for high activation
+            const lightness = 30 + activationColorIntensity * 40; // Brighter for high activation
+            ctx.fillStyle = `hsl(${hue}, 100%, ${lightness}%)`;
+            
+            ctx.beginPath();
+            ctx.arc(x, y, neuronRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#374151'; // Tailwind gray-700
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            if (label) {
+                ctx.fillStyle = '#1f2937'; // Tailwind gray-800
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.font = '10px Arial';
+                ctx.fillText(label, x, y);
+            }
+        }
+
+        function drawConnection(x1, y1, x2, y2, weight = 0) {
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            
+            // Weight visualization: thickness and color
+            // Normalize weight for thickness (e.g., map abs(weight) from 0-2 to 0.5-5px)
+            const absWeight = Math.abs(weight);
+            let thickness = 0.5 + Math.min(absWeight * 1.5, 4); // Cap thickness
+            ctx.lineWidth = thickness;
+
+            // Color based on sign of weight
+            if (weight > 0) {
+                ctx.strokeStyle = `rgba(0, 128, 0, ${Math.min(0.3 + absWeight * 0.3, 1)})`; // Green, opacity based on magnitude
+            } else {
+                ctx.strokeStyle = `rgba(255, 0, 0, ${Math.min(0.3 + absWeight * 0.3, 1)})`; // Red, opacity based on magnitude
+            }
+            ctx.stroke();
+        }
+        
+        function drawNetwork() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const layerYs = {
+                input: canvas.height / 2,
+                hidden: canvas.height / 2,
+                output: canvas.height / 2,
+            };
+
+            const layerXs = {
+                input: 100,
+                hidden: 100 + layerSpacing,
+                output: 100 + layerSpacing * 2,
+            };
+            
+            // Function to calculate Y positions for neurons in a layer
+            const getNeuronY = (index, totalNeurons, layerCenterY) => {
+                const totalHeight = (totalNeurons - 1) * neuronSpacing;
+                return layerCenterY - totalHeight / 2 + index * neuronSpacing;
+            };
+
+            // Draw Input Layer
+            // network.input_activations might be empty initially, ensure it's an array
+            (network.input_activations || []).forEach((activation, i) => {
+                const y = getNeuronY(i, network.inputNodes, layerYs.input);
+                drawNeuron(layerXs.input, y, activation, `I${i}`);
+            });
+
+            // Draw Hidden Layer
+            (network.hidden_activations || []).forEach((activation, i) => {
+                 const y = getNeuronY(i, network.hiddenNodes, layerYs.hidden);
+                drawNeuron(layerXs.hidden, y, activation, `H${i}`);
+            });
+
+            // Draw Output Layer
+             (network.output_activations || []).forEach((activation, i) => {
+                const y = getNeuronY(i, network.outputNodes, layerYs.output);
+                drawNeuron(layerXs.output, y, activation, `O${i}`);
+            });
+
+
+            // Draw connections (Input to Hidden)
+            for (let i = 0; i < network.hiddenNodes; i++) {
+                const hiddenY = getNeuronY(i, network.hiddenNodes, layerYs.hidden);
+                for (let j = 0; j < network.inputNodes; j++) {
+                    const inputY = getNeuronY(j, network.inputNodes, layerYs.input);
+                    drawConnection(layerXs.input, inputY, layerXs.hidden, hiddenY, network.weights_ih[i][j]);
+                }
+            }
+
+            // Draw connections (Hidden to Output)
+            for (let i = 0; i < network.outputNodes; i++) {
+                const outputY = getNeuronY(i, network.outputNodes, layerYs.output);
+                for (let j = 0; j < network.hiddenNodes; j++) {
+                    const hiddenY = getNeuronY(j, network.hiddenNodes, layerYs.hidden);
+                    drawConnection(layerXs.hidden, hiddenY, layerXs.output, outputY, network.weights_ho[i][j]);
+                }
+            }
+
+            // Draw layer labels
+            ctx.fillStyle = '#374151'; // Tailwind gray-700
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Input Layer', layerXs.input, 30);
+            ctx.fillText('Hidden Layer', layerXs.hidden, 30);
+            ctx.fillText('Output Layer', layerXs.output, 30);
+        }
+
+
+        // --- Training Logic ---
+        function trainingStep() {
+            if (!isTraining && !nextStepTriggered) return; // Stop if not training and not manually stepping
+
+            const currentData = dataset[currentSampleIndex];
+            const inputs = currentData.inputs;
+            const targets = currentData.targets;
+
+            // Train the network with the current sample
+            network.train(inputs, targets, learningRate); // feedForward is called within train
+
+            // Calculate loss for this sample (Mean Squared Error for simplicity)
+            const outputs = network.output_activations;
+            let sampleLoss = 0;
+            for (let i = 0; i < outputs.length; i++) {
+                sampleLoss += Math.pow(targets[i] - outputs[i], 2);
+            }
+            sampleLoss /= outputs.length; // Average the squared error if multiple outputs
+            
+            totalLossLastEpoch += sampleLoss;
+            samplesInEpoch++;
+
+            // Update displays
+            epochDisplay.textContent = currentEpoch;
+            sampleDisplay.textContent = `${currentSampleIndex + 1}`;
+            lossDisplay.textContent = sampleLoss.toFixed(4);
+            currentInputDisplay.textContent = `[${inputs.join(', ')}]`;
+            currentTargetDisplay.textContent = `[${targets.join(', ')}]`;
+            currentOutputDisplay.textContent = `[${outputs.map(o => o.toFixed(3)).join(', ')}]`;
+
+            drawNetwork(); // Redraw after training on one sample
+
+            currentSampleIndex++;
+            if (currentSampleIndex >= dataset.length) {
+                currentSampleIndex = 0;
+                currentEpoch++;
+                const averageEpochLoss = samplesInEpoch > 0 ? totalLossLastEpoch / samplesInEpoch : 0;
+                lossDisplay.textContent = averageEpochLoss.toFixed(4); // Display average loss for the completed epoch
+                totalLossLastEpoch = 0;
+                samplesInEpoch = 0;
+                epochDisplay.textContent = currentEpoch; // Update epoch after it's fully completed
+            }
+            
+            if (nextStepTriggered) {
+                nextStepTriggered = false; // Reset trigger if it was a manual step
+                if (!isTraining) return; // If not also continuously training, stop here
+            }
+
+            if (isTraining) {
+                animationFrameId = requestAnimationFrame(trainingStep);
+            }
+        }
+        
+        let nextStepTriggered = false;
+
+        function startTraining() {
+            if (isTraining) return;
+            isTraining = true;
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            nextStepButton.disabled = true;
+            resetButton.disabled = true;
+            lrSlider.disabled = true;
+            // Ensure initial activations are populated for the first draw in training
+            if (network.input_activations.length === 0) {
+                 network.feedForward(dataset[currentSampleIndex].inputs);
+            }
+            animationFrameId = requestAnimationFrame(trainingStep);
+        }
+
+        function stopTraining() {
+            isTraining = false;
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            nextStepButton.disabled = false;
+            resetButton.disabled = false;
+            lrSlider.disabled = false;
+        }
+
+        function resetNetwork() {
+            stopTraining();
+            network = new NeuralNetwork(INPUT_NODES, HIDDEN_NODES, OUTPUT_NODES);
+            currentEpoch = 0;
+            currentSampleIndex = 0;
+            totalLossLastEpoch = 0;
+            samplesInEpoch = 0;
+            // Reset displays to initial state
+            epochDisplay.textContent = '0';
+            sampleDisplay.textContent = '-';
+            lossDisplay.textContent = 'N/A';
+            currentInputDisplay.textContent = '-';
+            currentTargetDisplay.textContent = '-';
+            currentOutputDisplay.textContent = '-';
+            
+            // Perform an initial feedforward with the first data sample (or zeros) to populate activations for drawing
+            network.feedForward(dataset[0].inputs); 
+            drawNetwork();
+            
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            nextStepButton.disabled = false;
+            resetButton.disabled = false;
+            lrSlider.disabled = false;
+        }
+        
+        function handleNextStep() {
+            if (isTraining) return; // Don't allow manual step if auto-training
+            nextStepTriggered = true;
+             // Ensure initial activations are populated for the first draw in next step
+            if (network.input_activations.length === 0) {
+                 network.feedForward(dataset[currentSampleIndex].inputs);
+            }
+            trainingStep(); // Call one step
+        }
+
+
+        // --- Event Listeners ---
+        startButton.addEventListener('click', startTraining);
+        stopButton.addEventListener('click', stopTraining);
+        resetButton.addEventListener('click', resetNetwork);
+        nextStepButton.addEventListener('click', handleNextStep);
+
+        lrSlider.addEventListener('input', (e) => {
+            learningRate = parseFloat(e.target.value);
+            lrValueDisplay.textContent = learningRate.toFixed(2);
+        });
+        
+        // Initial setup
+        window.onload = () => {
+            learningRate = parseFloat(lrSlider.value); // Set initial learning rate from slider
+            lrValueDisplay.textContent = learningRate.toFixed(2);
+            // Initial draw of the network with random weights
+            // Perform an initial feedforward with the first data sample (or default)
+            // to ensure activations are populated for the first draw.
+            if(dataset.length > 0 && dataset[0].inputs) {
+                 network.feedForward(dataset[0].inputs);
+            } else {
+                 // Fallback if dataset is somehow empty or malformed
+                 network.feedForward(Array(INPUT_NODES).fill(0));
+            }
+            drawNetwork();
+            stopButton.disabled = true; // Stop button initially disabled
+        };
+
+    </script>
+</body>
+</html>
